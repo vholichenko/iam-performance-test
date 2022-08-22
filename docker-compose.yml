@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:13.3
+    environment:
+      POSTGRES_DB: "iam-perf"
+      POSTGRES_USER: "iam-perf"
+      POSTGRES_PASSWORD: "root"
+    ports:
+      - "5432:5432"
+    container_name: "iam-performance-test"
