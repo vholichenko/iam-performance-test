@@ -126,6 +126,29 @@ func NewKRN(prefixToken, service, tenantID string, pool []string, resourceType s
 	return res, nil
 }
 
+type void struct{}
+
+var member void
+
+func NewKRNArrayFromStrings(krn ...string) []string {
+	krnSet := make(map[string]void)
+	for _, k := range krn {
+		krnFromString, _ := NewKRNFromString(k)
+		for _, s := range krnFromString.MatchingKRNs() {
+			krnSet[s] = member
+		}
+	}
+
+	keys := make([]string, len(krnSet))
+
+	i := 0
+	for k := range krnSet {
+		keys[i] = k
+		i++
+	}
+	return keys
+}
+
 // NewKRNFromString constructs a new KRN based on its string representation.
 //
 // One of the returned values is always nil.

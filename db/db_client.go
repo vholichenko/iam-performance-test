@@ -74,5 +74,9 @@ func (c *Client) CreateStatementGinIndexes() error {
 		return err
 	}
 
+	if err := c.Client.Exec("CREATE INDEX IF NOT EXISTS idx_hash_statement_type ON statements USING hash (type);").Error; err != nil {
+		return err
+	}
+
 	return nil
 }

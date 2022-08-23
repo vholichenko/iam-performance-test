@@ -123,6 +123,60 @@ func SearchResourcesByParams(request *EvaluatePermissionRequest) *[]string {
 	return &resources
 }
 
+func SearchResourcesByParamsGroupingByType(request *EvaluatePermissionRequest) ([]string, []string, error) {
+	krnToType := make([]map[string]interface{}, 0)
+
+	start := time.Now()
+	query := "select s.type, array_agg(distinct r) as krn from statements s CROSS JOIN LATERAL unnest(s.resources) r where 1 = 1 "
+
+	if len(request.Actions) != 0 {
+		query += whereClause(request.Actions, "actions")
+	}
+
+	if len(request.Resources) != 0 {
+		query += whereClause(request.Resources, "resources")
+	}
+
+	if len(request.Principals) != 0 {
+		query += whereClause(request.Principals, "principals")
+	}
+
+	query += newline + "group by s.type;"
+
+	client, err := NewClient()
+
+	if err != nil {
+		fmt.Printf("Error occurred during connecting to PostgresSQL: %v", err)
+		return nil, nil, err
+	}
+
+	client.Client.Raw(query).Scan(&krnToType)
+
+	fmt.Printf("Search took: %s \n", time.Since(start).String())
+
+	allowed, denied := splitByType(krnToType)
+
+	return allowed, denied, nil
+}
+
+func splitByType(krnToType []map[string]interface{}) ([]string, []string) {
+	allowed := make([]string, 0)
+	denied := make([]string, 0)
+
+	for _, krnToEffectItem := range krnToType {
+		resourceKRN := krnToEffectItem["krn"].(string)
+		resourceEffect := krnToEffectItem["type"]
+
+		if resourceEffect == "Allow" {
+			allowed = append(allowed, resourceKRN)
+		} else {
+			denied = append(denied, resourceKRN)
+		}
+	}
+
+	return allowed, denied
+}
+
 func SearchPrincipalsByParams(request *EvaluatePermissionRequest) *[]string {
 	var resources []string
 
@@ -191,6 +245,20 @@ func FillStatement() {
 	println("Statement filled")
 }
 
+func FillStatementOneAllowedResource(actionParam, resourceParam, principalParam string) {
+	client, _ := NewClient()
+
+	actionsArr := []action.Action{action.Action(actionParam)}
+
+	resourceKrn, _ := krn.NewKRNFromString(resourceParam)
+	resourcesArr := []*krn.KRN{resourceKrn}
+
+	principalKrn, _ := krn.NewKRNFromString(principalParam)
+	principalsArr := []*krn.KRN{principalKrn}
+
+	client.Client.Create(&model.Statement{Type: "Allow", Actions: actionsArr, Resources: resourcesArr, Principals: principalsArr})
+}
+
 func buildStatement(serviceName string, tenantName string, includeServiceWildcard bool) *model.Statement {
 	var actions = []action.Action{"iam:endpoint:read", "iam:endpoint:write", "iam:endpoint:delete"}
 
@@ -220,10 +288,10 @@ func buildStatement(serviceName string, tenantName string, includeServiceWildcar
 		principals = append(principals, principalKrn)
 	}
 
-	types := []string{"Allow", "Deny"}
-	randomIdx := rand.Intn(len(types))
+	//types := []string{"Allow", "Deny"}
+	//randomIdx := rand.Intn(len(types))
 
-	return &model.Statement{Type: types[randomIdx], Actions: actions, Resources: resources, Principals: principals}
+	return &model.Statement{Type: /*types[randomIdx]*/ "Allow", Actions: actions, Resources: resources, Principals: principals}
 }
 
 func generateRandomString() string {
